@@ -282,7 +282,15 @@ fn group_movies(files: &[FileInfo], base: &str) -> Vec<Group> {
     let mut index_of: HashMap<String, usize> = HashMap::new();
 
     for (dir, members) in by_dir {
-        let rel = rel_segments(dir, base);
+        let mut rel = rel_segments(dir, base);
+        // "Movie (1972)/Movie-CD1/", ".../Movie-CD2/": the parts belong to
+        // the parent folder's movie.
+        let mut dir = dir.to_string();
+        while rel.len() > 1 && rel.last().is_some_and(|f| is_part_folder(f)) {
+            rel.pop();
+            dir = up_one(&dir);
+        }
+        let dir = dir.as_str();
         let folder = rel.first().cloned();
         let parsed: Vec<naming::Parsed> = members.iter().map(|&i| naming::parse(&files[i].name)).collect();
         let distinct: BTreeSet<String> = parsed.iter().map(|p| naming::title_key(&p.title)).collect();
@@ -307,15 +315,19 @@ fn group_movies(files: &[FileInfo], base: &str) -> Vec<Group> {
                 ),
                 _ => (parsed[0].title.clone(), parsed[0].year),
             };
-            groups.push(Group {
-                key: format!("d:{dir}"),
-                name,
-                year,
-                dir_url: dir.to_string(),
-                folder: if rel.len() > 1 { folder } else { None },
-                files: members,
-                ..Group::default()
+            let key = format!("d:{dir}");
+            let at = *index_of.entry(key.clone()).or_insert_with(|| {
+                groups.push(Group {
+                    key,
+                    name,
+                    year,
+                    dir_url: dir.to_string(),
+                    folder: if rel.len() > 1 { folder } else { None },
+                    ..Group::default()
+                });
+                groups.len() - 1
             });
+            groups[at].files.extend(members);
         } else {
             for (&i, p) in members.iter().zip(&parsed) {
                 let key = format!("f:{dir}#{}#{}", naming::title_key(&p.title), p.year.unwrap_or(0));
@@ -345,6 +357,20 @@ fn strip_list_number(name: &str) -> &str {
         Some(rest) if (1..=3).contains(&digits) && !rest.trim().is_empty() => rest,
         _ => name,
     }
+}
+
+/// "Pratidwandi-CD2", "Disc 1", "CD 2": one part of a multi-part movie.
+fn is_part_folder(name: &str) -> bool {
+    let n = name.trim().to_ascii_lowercase();
+    let stem = n.trim_end_matches(|c: char| c.is_ascii_digit());
+    if stem.len() == n.len() {
+        return false; // no part number
+    }
+    let stem = stem.trim_end();
+    ["cd", "disc", "disk"].iter().any(|tag| {
+        stem.strip_suffix(tag)
+            .is_some_and(|before| before.chars().last().is_none_or(|c| !c.is_alphanumeric()))
+    })
 }
 
 /// Collections number their folders ("130 Batman Begins (2005)"). Drops
@@ -920,7 +946,12 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<Detail>> {
         match last_played {
             Some(i) if i + 1 < rows.len() => Some(rows[i + 1].file_id),
             Some(_) => rows.iter().find(|f| !f.watched).map(|f| f.file_id),
-            None => rows.iter().find(|f| !f.watched).or(rows.first()).map(|f| f.file_id),
+            None => rows
+                .iter()
+                .find(|f| !f.watched && f.episode != Some(0) && f.season != Some(0))
+                .or_else(|| rows.iter().find(|f| !f.watched))
+                .or(rows.first())
+                .map(|f| f.file_id),
         }
     } else {
         files.first().map(|f| f.file_id)
@@ -1217,6 +1248,9 @@ mod tests {
         assert_eq!(strip_list_number("002. The Godfather (1972) 1080p"), "The Godfather (1972) 1080p");
         assert_eq!(strip_list_number("1917 (2019)"), "1917 (2019)");
         assert_eq!(strip_list_number("2001. A Space Odyssey"), "2001. A Space Odyssey");
+        assert!(is_part_folder("(1972) Pratidwandi-CD2"));
+        assert!(is_part_folder("Disc 1"));
+        assert!(!is_part_folder("Abcd"));
     }
 
     #[test]

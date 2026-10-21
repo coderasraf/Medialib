@@ -142,6 +142,7 @@ h1.page-title { font-size: 25px; font-weight: 700; margin: 6px 0 4px; letter-spa
 .select select {
   appearance: none; -webkit-appearance: none; background: var(--panel); border: 1px solid var(--line-2);
   border-radius: 6px; height: 34px; padding: 0 34px 0 12px; font-size: 13px; color: #d9dce3; cursor: pointer; min-width: 92px;
+  max-width: 230px; text-overflow: ellipsis;
 }
 .select select:hover { border-color: #3b4252; }
 .select select:focus { outline: none; border-color: #4a5265; }

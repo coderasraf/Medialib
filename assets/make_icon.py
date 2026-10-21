@@ -92,6 +92,25 @@ def main():
     with open("icon-64.rgba", "wb") as f:
         f.write(b"".join(bytes(px) for row in images[64] for px in row))
 
+    with open("icon-256.png", "wb") as f:
+        f.write(png(images[256]))
+
+
+def png(rows):
+    """Minimal RGBA PNG encoder, for the README logo."""
+    import zlib
+
+    size = len(rows)
+
+    def chunk(kind, data):
+        body = kind + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+
+    raw = b"".join(b"\0" + b"".join(bytes(px) for px in row) for row in rows)
+    header = struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header)
+            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+
 
 if __name__ == "__main__":
     main()

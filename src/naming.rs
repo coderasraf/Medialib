@@ -49,11 +49,22 @@ fn metadata() -> &'static Regex {
                 x26[45]|h\ ?26[45]|hevc|avc|xvid|divx|10\ ?bit|
                 aac\d?|e?ac3|dts(?:-hd)?|truehd|atmos|ddp?\d|flac|
                 remux|proper|repack|extended|unrated|imax|remastered|
-                dual[\ -]audio|multi[\ -]audio|esubs?
+                dual[\ -]audio|multi[\ -]audio|esubs?|cd\ ?\d|disc\ ?\d
             )\b",
         )
         .unwrap()
     })
+}
+
+fn leading_year() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"^[(\[]\s*((?:19|20)\d{2})\s*[)\]]\s*").unwrap())
+}
+
+fn date_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    // dd-mm-yyyy / dd mm yyyy (dots are spaces by now), optionally bracketed.
+    RE.get_or_init(|| Regex::new(r"\(?\b\d{1,2}[-/ ]\d{1,2}[-/ ]((?:19|20)\d{2})\b\)?").unwrap())
 }
 
 fn leading_group() -> &'static Regex {
@@ -69,9 +80,15 @@ pub fn parse(filename: &str) -> Parsed {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
-    let text = leading_group().replace(&normalised, "").into_owned();
+    let mut text = leading_group().replace(&normalised, "").into_owned();
 
     let mut parsed = Parsed::default();
+    // "(1972) Pratidwandi": a bracketed year in front is the year, not the
+    // title. A bare leading year stays ("2001 A Space Odyssey").
+    if let Some(c) = leading_year().captures(&text) {
+        parsed.year = c[1].parse().ok();
+        text = text[c.get(0).unwrap().end()..].to_string();
+    }
     let mut cut = text.len();
 
     if let Some(c) = season_episode().captures(&text) {
@@ -86,10 +103,28 @@ pub fn parse(filename: &str) -> Parsed {
     if let Some(m) = metadata().find(&text) {
         cut = cut.min(m.start());
     }
+    // "(TV Documentary 2016)", "(TV Special 2018)": the tag carries the year
+    // and ends the title.
+    if let Some(c) = tv_series_tag().captures(&text).filter(|c| c.get(0).unwrap().start() > 0) {
+        if c.get(0).unwrap().start() < cut {
+            cut = c.get(0).unwrap().start();
+            parsed.year = c[1].parse().ok();
+        }
+    }
+    // Event dates, "WWE Battleground (19-07-2015)": the year, and the end of
+    // the title.
+    if let Some(c) = date_re().captures(&text).filter(|c| c.get(0).unwrap().start() > 0) {
+        if c.get(0).unwrap().start() < cut {
+            cut = c.get(0).unwrap().start();
+            parsed.year = c[1].parse().ok();
+        }
+    }
     // Of the years before the other cut points, take the *last* one: in
     // "Blade Runner 2049 2017 1080p" the first is part of the title. A year at
     // position 0 is always the title ("1917", "2001 A Space Odyssey").
-    if let Some(m) = year()
+    if parsed.year.is_some() {
+        // Already found in a leading year, tag or date.
+    } else if let Some(m) = year()
         .find_iter(&text)
         .filter(|m| m.start() > 0 && m.start() < cut)
         .last()
@@ -123,7 +158,7 @@ fn tv_series_tag() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"(?i)\(\s*(?:tv\s+)?(?:mini[\s-]+)?(?:series|show)\s+(\d{4})\s*(?:([–—-])\s*(\d{4})?)?\s*\)",
+            r"(?i)\(\s*(?:tv\s+)?(?:mini[\s-]+)?(?:series|shows?|special|documentary|movie|short|video)\s+(\d{4})\s*(?:([–—-])\s*(\d{4})?)?\s*\)",
         )
         .unwrap()
     })
@@ -374,6 +409,23 @@ mod tests {
             parse("Blade.Runner.2049.2017.2160p.mkv"),
             p("Blade Runner 2049", None, None, Some(2017))
         );
+    }
+
+    #[test]
+    fn tagged_and_dated_names() {
+        assert_eq!(parse("13th (TV Documentary 2016) 720p WEBRip"), p("13th", None, None, Some(2016)));
+        assert_eq!(
+            parse("14 Peaks-Nothing Is Impossible (TV Documentary 2021) 720p NF [Dual Audio]"),
+            p("14 Peaks-Nothing Is Impossible", None, None, Some(2021))
+        );
+        assert_eq!(parse("Adam Sandler-100% Fresh (TV Special 2018) 720p"), p("Adam Sandler-100% Fresh", None, None, Some(2018)));
+        assert_eq!(parse("WWE Battleground (19-07-2015) HDTV"), p("WWE Battleground", None, None, Some(2015)));
+        assert_eq!(parse("(1972) Pratidwandi-CD2"), p("Pratidwandi", None, None, Some(1972)));
+        assert_eq!(parse("Pratidwandi (1972)-CD2.avi"), p("Pratidwandi", None, None, Some(1972)));
+        assert_eq!(parse("2001 A Space Odyssey (1968) 1080p.mkv"), p("2001 A Space Odyssey", None, None, Some(1968)));
+        assert_eq!(parse("WWE.Backlash.2016.Kickoff.WEB.h264-HEEL.mp4").year, Some(2016));
+        let f = parse_show_folder("Aapka Apna Zakir (TV Shows 2024– ) 720p");
+        assert_eq!((f.title.as_str(), f.year, f.ongoing), ("Aapka Apna Zakir", Some(2024), true));
     }
 
     #[test]
