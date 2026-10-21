@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>medialib</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <a class="brand" href="#/">
+      <span class="brand-logo"></span>
+      <span class="brand-text"><b>medialib</b><small>Local library</small></span>
+    </a>
+    <nav id="nav-main"></nav>
+    <div class="nav-label">Library</div>
+    <nav id="nav-library"></nav>
+    <div class="nav-label">Sources <button class="nav-add" id="add-source" title="Add a source"></button></div>
+    <nav id="nav-sources" class="scroll"></nav>
+    <nav id="nav-bottom"></nav>
+  </aside>
+
+  <section id="main">
+    <header id="topbar">
+      <label class="search">
+        <span class="search-icon"></span>
+        <input id="search" type="search" placeholder="Search movies, shows, years…" autocomplete="off" spellcheck="false">
+        <kbd>Ctrl K</kbd>
+      </label>
+      <div class="top-right">
+        <div id="job" class="job" hidden>
+          <span class="spinner"></span>
+          <span id="job-text"></span>
+          <button id="job-stop" class="job-stop" title="Stop"></button>
+        </div>
+        <a class="icon-btn" href="#/settings/sources" id="top-settings" title="Settings"></a>
+      </div>
+      <div id="progress"><div id="progress-bar"></div></div>
+    </header>
+    <div id="page" tabindex="-1"></div>
+  </section>
+</div>
+
+<button id="fab" class="fab" title="Watch assistant"></button>
+<div id="assistant" class="assistant" hidden></div>
+<div id="overlay-root"></div>
+<div id="toasts"></div>
+<script src="/app.js"></script>
+</body>
+</html>

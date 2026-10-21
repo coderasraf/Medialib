@@ -1,0 +1,56 @@
+# medialib configuration. Copy to config.toml and edit.
+#
+# !! KEY ORDER MATTERS !!
+# Every bare key (db_path, concurrency, media_extensions, skip_dirs, ...) must
+# come BEFORE the first [player] or [[roots]] header. In TOML a bare key
+# belongs to the most recent header above it, so `skip_dirs = [...]` written
+# below [[roots]] becomes a field of that root, not a top-level setting.
+# medialib rejects unknown fields in those tables, so that mistake is a load
+# error instead of a crawl that quietly indexes every sample folder.
+
+# SQLite file holding the index and the crawl checkpoints.
+db_path = "medialib.db"
+
+# Directory pages fetched in parallel. Keep this modest on a home NAS.
+concurrency = 4
+
+# Pause between depth levels, in milliseconds.
+delay_ms = 250
+
+# Per-request timeout, in seconds.
+timeout_secs = 20
+
+# Maximum directory depth below a root. Stops symlink loops, which produce
+# ever-longer distinct URLs and so are never caught as "already visited".
+max_depth = 12
+
+# File extensions to index (case-insensitive, leading dot optional).
+media_extensions = [
+  "mkv", "mp4", "m4v", "avi", "mov", "webm", "wmv",
+  "ts", "m2ts", "mpg", "mpeg", "ogv",
+]
+
+# Directories to skip: case-insensitive SUBSTRING match on the directory name,
+# so "sample" also skips "Movie.Sample" and "Samples".
+skip_dirs = ["sample", "featurettes", "extras", "behind the scenes"]
+
+# External player. {url} in any argument is replaced with the media URL; if no
+# argument contains {url}, the URL is appended at the end.
+[player]
+command = "vlc"
+args = ["--play-and-exit", "{url}"]
+# Windows, when VLC isn't on PATH:
+# command = 'C:\Program Files\VideoLAN\VLC\vlc.exe'
+# mpv instead:
+# command = "mpv"
+# args = ["--force-window=immediate", "{url}"]
+
+# One block per listing server or share. Crawling stays on the same host and
+# below this path. A trailing slash is added if missing.
+[[roots]]
+name = "nas"
+url = "http://192.168.1.10/media/"
+
+# [[roots]]
+# name = "archive"
+# url = "https://mirror.example.org/pub/videos/"

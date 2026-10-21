@@ -1,0 +1,45 @@
+[package]
+name = "medialib"
+version = "0.2.0"
+edition = "2021"
+description = "Index, search and play media from local folders and HTTP directory listings"
+build = "build.rs"
+
+[lib]
+path = "src/lib.rs"
+
+# Command-line interface.
+[[bin]]
+name = "medialib"
+path = "src/main.rs"
+
+# Desktop app: the web UI in a native window.
+[[bin]]
+name = "medialib-desktop"
+path = "src/desktop.rs"
+
+[dependencies]
+anyhow = "1"
+axum = "0.8"
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
+regex = "1"
+reqwest = { version = "0.12", features = ["gzip", "json"] }
+rfd = "0.17"
+rusqlite = { version = "0.32", features = ["bundled"] }
+scraper = "0.20"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tao = "0.37"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "net"] }
+toml = "0.8"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.7", features = ["fs"] }
+url = "2"
+wry = "0.57"
+
+[build-dependencies]
+embed-resource = "3"
+
+[profile.release]
+strip = true
