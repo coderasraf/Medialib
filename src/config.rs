@@ -161,7 +161,9 @@ fn default_tmdb_language() -> String {
     "en-US".into()
 }
 fn default_assistant_model() -> String {
-    "gemini-2.5-flash".into()
+    // An alias Google keeps pointing at its current Flash model; pinned
+    // versions get retired ("no longer available to new users").
+    "gemini-flash-latest".into()
 }
 fn default_true() -> bool {
     true

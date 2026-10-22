@@ -905,6 +905,13 @@ async fn save_tmdb(State(st): State<AppState>, Json(t): Json<crate::config::Tmdb
 
 async fn save_assistant(State(st): State<AppState>, Json(a): Json<crate::config::Assistant>) -> ApiResult {
     st.update_config(|cfg| {
+        if !assistant::is_chat_model(&a.model) {
+            bail!(
+                "{} can't write text replies (it's a speech or image model); \
+                 choose a chat model such as gemini-flash-latest",
+                a.model
+            );
+        }
         cfg.assistant = a;
         Ok(())
     })?;

@@ -19,6 +19,10 @@
   --red: #ff6b6b;
   --radius: 8px;
   --side-w: 236px;
+  /* Fluid sizing: page margins and poster width grow with the window, so a
+     wide monitor gets more (and slightly larger) posters, not empty space. */
+  --gutter: clamp(20px, 2.2vw, 56px);
+  --card: clamp(150px, 9.2vw, 250px);
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -88,10 +92,10 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 #main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 #topbar {
   position: relative; display: flex; align-items: center; gap: 16px;
-  padding: 12px 32px; border-bottom: 1px solid #1a1d24; background: var(--bg);
+  padding: 12px var(--gutter); border-bottom: 1px solid #1a1d24; background: var(--bg);
 }
 .search {
-  display: flex; align-items: center; gap: 10px; width: min(560px, 50vw);
+  display: flex; align-items: center; gap: 10px; width: clamp(280px, 34vw, 760px);
   background: var(--panel); border: 1px solid var(--line-2); border-radius: 9px; padding: 0 10px 0 14px; height: 38px;
 }
 .search:focus-within { border-color: #4a5265; }
@@ -132,7 +136,7 @@ kbd {
 @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 
 #page { flex: 1; overflow-y: auto; outline: none; }
-.wrap { padding: 28px 32px 80px; max-width: 1780px; }
+.wrap { padding: 28px var(--gutter) 80px; }
 h1.page-title { font-size: 25px; font-weight: 700; margin: 6px 0 4px; letter-spacing: -.2px; }
 .subtitle { color: var(--muted); font-size: 13px; }
 
@@ -158,7 +162,7 @@ h1.page-title { font-size: 25px; font-weight: 700; margin: 6px 0 4px; letter-spa
 
 /* -------------------------------------------------------------- cards */
 .grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 28px 20px; margin-top: 26px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card), 1fr)); gap: clamp(22px, 1.6vw, 34px) clamp(16px, 1.1vw, 26px); margin-top: 26px;
 }
 .card { cursor: pointer; min-width: 0; }
 .poster {
@@ -210,7 +214,7 @@ h1.page-title { font-size: 25px; font-weight: 700; margin: 6px 0 4px; letter-spa
 .row-head h2 { font-size: 18px; margin: 0; }
 .row-head a { color: var(--muted); font-size: 13px; }
 .row-head a:hover { color: var(--accent); }
-.strip { display: grid; grid-auto-flow: column; grid-auto-columns: 158px; gap: 18px; overflow-x: auto; padding-bottom: 12px; scroll-snap-type: x proximity; }
+.strip { display: grid; grid-auto-flow: column; grid-auto-columns: calc(var(--card) - 8px); gap: clamp(14px, 1vw, 24px); overflow-x: auto; padding-bottom: 12px; scroll-snap-type: x proximity; }
 .strip .card { scroll-snap-align: start; }
 .hero-home {
   position: relative; border-radius: 14px; overflow: hidden; min-height: 300px; display: flex; align-items: flex-end;
@@ -264,14 +268,14 @@ h1.page-title { font-size: 25px; font-weight: 700; margin: 6px 0 4px; letter-spa
   background: linear-gradient(90deg, var(--bg) 0%, rgba(15,17,21,.94) 32%, rgba(15,17,21,.6) 62%, rgba(15,17,21,.25) 100%),
               linear-gradient(0deg, var(--bg) 0%, transparent 35%);
 }
-.detail-inner { position: relative; z-index: 1; padding: 24px 32px 38px; }
+.detail-inner { position: relative; z-index: 1; padding: 24px var(--gutter) 38px; }
 .back { display: inline-flex; align-items: center; gap: 6px; color: #c9cdd6; font-size: 13px; margin-bottom: 22px; cursor: pointer; }
 .back:hover { color: var(--text); }
 .back svg { width: 15px; height: 15px; }
 .detail-top { display: flex; gap: 36px; align-items: center; }
-.detail-poster { width: 230px; flex-shrink: 0; border-radius: 8px; overflow: hidden; aspect-ratio: 2/3; background: #191d25; box-shadow: 0 10px 40px rgba(0,0,0,.55); position: relative; }
+.detail-poster { width: clamp(200px, 13vw, 320px); flex-shrink: 0; border-radius: 8px; overflow: hidden; aspect-ratio: 2/3; background: #191d25; box-shadow: 0 10px 40px rgba(0,0,0,.55); position: relative; }
 .detail-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.detail-info { min-width: 0; max-width: 820px; }
+.detail-info { min-width: 0; max-width: min(1200px, 100%); }
 .detail-info h1 { font-size: 40px; line-height: 1.12; margin: 0 0 10px; letter-spacing: -.5px; font-weight: 800; }
 .meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; color: #c4c9d3; font-size: 13.5px; }
 .star { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-weight: 700; }
@@ -286,13 +290,13 @@ h1.page-title { font-size: 25px; font-weight: 700; margin: 6px 0 4px; letter-spa
 .place { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12.5px; margin-left: 4px; }
 .place svg { width: 14px; height: 14px; }
 .tagline { font-style: italic; color: #d0d4dc; margin: 18px 0 0; }
-.overview { color: #c7cbd4; margin: 10px 0 0; line-height: 1.6; max-width: 780px; }
+.overview { color: #c7cbd4; margin: 10px 0 0; line-height: 1.6; max-width: 1000px; }
 .credits { color: var(--muted); margin-top: 12px; font-size: 13.5px; }
 .credits b { color: var(--text); font-weight: 500; margin-left: 6px; }
 .detail-actions { margin-top: 26px; }
 .fix-match { margin-top: 14px; font-size: 12.5px; color: var(--dim); }
 
-.seasons-bar { display: flex; align-items: center; gap: 10px; padding: 26px 32px 0; flex-wrap: wrap; }
+.seasons-bar { display: flex; align-items: center; gap: 10px; padding: 26px var(--gutter) 0; flex-wrap: wrap; }
 .season-pill {
   height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: none; cursor: pointer;
   display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; color: #cfd3dc;
@@ -301,7 +305,7 @@ h1.page-title { font-size: 25px; font-weight: 700; margin: 6px 0 4px; letter-spa
 .season-pill.on { background: #f2f3f6; border-color: #f2f3f6; color: #111; }
 .season-pill.on small { color: #555; }
 .seasons-bar .total { margin-left: auto; color: var(--muted); font-size: 12.5px; }
-.episodes { padding: 18px 32px 60px; display: flex; flex-direction: column; gap: 12px; max-width: 1200px; }
+.episodes { padding: 18px var(--gutter) 60px; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 720px), 1fr)); gap: 12px; }
 .episode {
   display: flex; gap: 18px; padding: 10px; border-radius: 9px; border: 1px solid transparent; background: transparent; cursor: pointer; position: relative;
 }
@@ -328,7 +332,7 @@ h1.page-title { font-size: 25px; font-weight: 700; margin: 6px 0 4px; letter-spa
 .version { height: 24px; padding: 0 9px; border-radius: 5px; border: 1px solid var(--line-2); background: var(--panel); font-size: 11.5px; font-weight: 600; color: #cbd0d9; cursor: pointer; }
 .version:hover { border-color: var(--accent-line); color: var(--accent); }
 
-.files { padding: 24px 32px 60px; max-width: 1200px; }
+.files { padding: 24px var(--gutter) 60px; }
 .files h3 { font-size: 15px; margin: 0 0 12px; }
 .file-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); margin-bottom: 10px; }
 .file-row .name { flex: 1; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
@@ -343,7 +347,7 @@ h1.page-title { font-size: 25px; font-weight: 700; margin: 6px 0 4px; letter-spa
 .tab svg { width: 16px; height: 16px; }
 .tab:hover { color: var(--text); }
 .tab.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; margin-bottom: 22px; max-width: 1120px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; margin-bottom: 22px; }
 .panel h2 { font-size: 16px; margin: 0; }
 .panel .lead { color: var(--muted); font-size: 13px; margin: 3px 0 18px; }
 .panel-head { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
@@ -467,10 +471,8 @@ h1.page-title { font-size: 25px; font-weight: 700; margin: 6px 0 4px; letter-spa
 
 @media (max-width: 900px) {
   :root { --side-w: 200px; }
-  .wrap, .detail-inner { padding-left: 20px; padding-right: 20px; }
   .detail-top { flex-direction: column; align-items: flex-start; }
   .detail-poster { width: 160px; }
   .detail-info h1 { font-size: 30px; }
   .still { width: 150px; }
-  #topbar { padding: 10px 20px; }
 }

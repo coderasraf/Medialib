@@ -26,7 +26,9 @@ use crate::naming;
 const API: &str = "https://generativelanguage.googleapis.com/v1beta";
 
 fn client() -> Result<reqwest::Client> {
-    Ok(reqwest::Client::builder().timeout(Duration::from_secs(90)).build()?)
+    // 25 s: plenty for a normal answer, short enough that an overloaded
+    // model falls through to the backup instead of hanging the chat.
+    Ok(reqwest::Client::builder().timeout(Duration::from_secs(25)).build()?)
 }
 
 /// Models that can generate text, for the settings dropdown.
@@ -56,21 +58,88 @@ pub async fn list_models(key: &str) -> Result<Vec<String>> {
         })
         .filter_map(|m| m["name"].as_str())
         .map(|n| n.trim_start_matches("models/").to_string())
-        .filter(|n| n.starts_with("gemini"))
+        .filter(|n| n.starts_with("gemini") && is_chat_model(n))
         .collect();
     names.sort_by(|a, b| b.cmp(a));
     Ok(names)
 }
 
+/// Whether a model can write text replies. Google lists speech (`-tts`),
+/// image, audio and live models under `generateContent` too, but they only
+/// answer in other formats, so they can't run the assistant.
+pub fn is_chat_model(name: &str) -> bool {
+    const NOT_CHAT: &[&str] = &[
+        "tts", "image", "audio", "live", "embedding", "aqa", "robotics", "computer-use", "veo",
+        "imagen", "lyria", "banana", "transcribe",
+    ];
+    let n = name.to_ascii_lowercase();
+    !NOT_CHAT.iter().any(|w| n.contains(w))
+}
+
 fn api_error(v: &Value, status: reqwest::StatusCode) -> String {
-    v["error"]["message"]
+    let msg = v["error"]["message"]
         .as_str()
         .map(String::from)
-        .unwrap_or_else(|| format!("Gemini returned {status}"))
+        .unwrap_or_else(|| format!("Gemini returned {status}"));
+    if msg.contains("response modalities") {
+        return "This model can't write text replies (it's a speech or image model). \
+                Choose a chat model such as gemini-flash-latest in Settings → AI assistant."
+            .into();
+    }
+    msg
 }
 
 /// One JSON-mode call. `turns` are (role, text) with role "user"/"model".
+/// Backup models tried, in order, when the chosen one is overloaded. The
+/// `-latest` alias follows Google's current Flash-Lite, so it doesn't go
+/// stale the way a pinned version name does.
+const FALLBACK_MODELS: &[&str] = &["gemini-flash-lite-latest", "gemini-3.5-flash-lite"];
+
+/// One JSON-mode call. `turns` are (role, text) with role "user"/"model".
+///
+/// Popular Gemini models are often briefly overloaded ("high demand", HTTP
+/// 503/429) or slow to answer. Rather than surface that, each model gets a
+/// second try after a short pause, then the call moves on to a lighter
+/// fallback model. Real errors (bad key, blocked prompt) return at once.
 async fn generate(cfg: &config::Assistant, system: &str, turns: &[(String, String)]) -> Result<Value> {
+    let mut models = vec![cfg.model.as_str()];
+    models.extend(FALLBACK_MODELS.iter().filter(|m| **m != cfg.model));
+    let mut last = anyhow!("Gemini didn't answer");
+    for model in models {
+        for attempt in 0..2 {
+            match generate_once(cfg, model, system, turns).await {
+                Ok(v) => return Ok(v),
+                Err(Busy(e)) => {
+                    // A quick "high demand" reply is worth one more try; a
+                    // timeout already cost the full wait, so move on.
+                    let timed_out = e.chain().any(|c| c.to_string().contains("timed out"));
+                    last = e;
+                    if attempt == 0 && !timed_out {
+                        tokio::time::sleep(Duration::from_millis(1500)).await;
+                    } else {
+                        break;
+                    }
+                }
+                Err(Fatal(e)) => return Err(e),
+            }
+        }
+    }
+    Err(last.context("Gemini is overloaded right now; try again in a minute"))
+}
+
+enum GenError {
+    /// Overloaded, rate-limited or timed out: worth retrying elsewhere.
+    Busy(anyhow::Error),
+    Fatal(anyhow::Error),
+}
+use GenError::{Busy, Fatal};
+
+async fn generate_once(
+    cfg: &config::Assistant,
+    model: &str,
+    system: &str,
+    turns: &[(String, String)],
+) -> std::result::Result<Value, GenError> {
     let contents: Vec<Value> = turns
         .iter()
         .map(|(role, text)| json!({ "role": role, "parts": [{ "text": text }] }))
@@ -80,17 +149,29 @@ async fn generate(cfg: &config::Assistant, system: &str, turns: &[(String, Strin
         "contents": contents,
         "generationConfig": { "responseMimeType": "application/json", "temperature": 0.7 },
     });
-    let resp = client()?
-        .post(format!("{API}/models/{}:generateContent", cfg.model))
+    let resp = client()
+        .map_err(Fatal)?
+        .post(format!("{API}/models/{model}:generateContent"))
         .header("x-goog-api-key", &cfg.api_key)
         .json(&body)
         .send()
         .await
-        .context("contacting Gemini")?;
+        .map_err(|e| {
+            let busy = e.is_timeout() || e.is_connect();
+            let e = anyhow!(e).context("contacting Gemini");
+            if busy { Busy(e) } else { Fatal(e) }
+        })?;
     let status = resp.status();
     let v: Value = resp.json().await.unwrap_or(Value::Null);
     if !status.is_success() {
-        bail!("{}", api_error(&v, status));
+        let e = anyhow!("{}", api_error(&v, status));
+        let overloaded = matches!(status.as_u16(), 429 | 500 | 503 | 504)
+            || v["error"]["status"] == "UNAVAILABLE"
+            || v["error"]["message"].as_str().is_some_and(|m| m.contains("high demand") || m.contains("overloaded"))
+            // A retired model ("no longer available") can still be
+            // replaced by a fallback.
+            || v["error"]["message"].as_str().is_some_and(|m| m.contains("no longer available"));
+        return Err(if overloaded { Busy(e) } else { Fatal(e) });
     }
     let text: String = v["candidates"][0]["content"]["parts"]
         .as_array()
@@ -99,9 +180,11 @@ async fn generate(cfg: &config::Assistant, system: &str, turns: &[(String, Strin
         .filter_map(|p| p["text"].as_str())
         .collect();
     if text.is_empty() {
-        bail!("Gemini returned no answer (it may have been blocked)");
+        return Err(Fatal(anyhow!("Gemini returned no answer (it may have been blocked)")));
     }
-    serde_json::from_str(strip_fences(&text)).context("Gemini's answer wasn't valid JSON")
+    serde_json::from_str(strip_fences(&text))
+        .context("Gemini's answer wasn't valid JSON")
+        .map_err(Busy)
 }
 
 /// Models sometimes wrap JSON in ``` fences even in JSON mode.
@@ -428,6 +511,19 @@ fn gather_candidates(conn: &Connection, plan: &Value) -> Result<Vec<Candidate>> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chat_models_only() {
+        assert!(is_chat_model("gemini-2.5-flash"));
+        assert!(is_chat_model("gemini-2.5-pro"));
+        assert!(!is_chat_model("gemini-2.5-flash-preview-tts"));
+        assert!(!is_chat_model("gemini-2.5-flash-image-preview"));
+        assert!(!is_chat_model("gemini-2.5-flash-native-audio-preview"));
+        assert!(!is_chat_model("gemini-live-2.5-flash"));
+        assert!(!is_chat_model("gemini-embedding-001"));
+        assert!(!is_chat_model("gemini-nano-banana-2.1"));
+        assert!(!is_chat_model("gemini-3.5-transcribe"));
+    }
 
     #[test]
     fn fences() {
