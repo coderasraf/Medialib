@@ -306,3 +306,10 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 > [!IMPORTANT]
 > medialib is a library and player, not a source of content. Use it only with
 > servers and folders you are allowed to access.
+
+## Author
+
+Built by **Ashraf Siddik**, Shopify developer & CRO specialist.
+
+- Website: [ashraf-siddik.com](https://ashraf-siddik.com)
+- GitHub: [@coderasraf](https://github.com/coderasraf)
